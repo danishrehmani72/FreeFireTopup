@@ -5,6 +5,7 @@ import FAQ from './components/FAQ';
 import WhatsAppButton from './components/WhatsAppButton';
 import { Zap, Clock, Shield } from 'lucide-react';
 import * as motion from 'motion/react-client';
+import { Analytics } from '@vercel/analytics/react';
 
 export default function App() {
   return (
@@ -66,6 +67,7 @@ export default function App() {
 
       <Footer />
       <WhatsAppButton />
+      <Analytics />
     </div>
   );
 }
