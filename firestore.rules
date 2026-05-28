@@ -1,0 +1,82 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Global Safety Net
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // Primitives
+    function isValidId(id) { return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$'); }
+    function incoming() { return request.resource.data; }
+    function existing() { return resource.data; }
+    function isSignedIn() { return true; }
+
+    function isValidUser(data, isCreate) {
+      let hasRequired = isCreate ? data.keys().hasAll(['uid', 'email', 'referralCode', 'balance', 'createdAt', 'updatedAt']) && data.keys().size() == 6 : true;
+      let types = data.uid is string && data.uid.size() <= 128
+               && data.email is string && data.email.size() <= 200
+               && data.referralCode is string && data.referralCode.size() <= 20
+               && data.balance is number;
+      let limits = data.balance >= 0;
+      return hasRequired && types && limits;
+    }
+
+    function isValidReferralCode(data, isCreate) {
+      let hasRequired = isCreate ? data.keys().hasAll(['ownerId', 'createdAt']) && data.keys().size() == 2 : true;
+      let types = data.ownerId is string && data.ownerId.size() <= 128;
+      return hasRequired && types;
+    }
+
+    function isValidTransaction(data, isCreate) {
+      let hasRequired = isCreate ? data.keys().hasAll(['userId', 'type', 'amount', 'status', 'createdAt']) && (data.keys().size() == 5 || (data.keys().size() == 6 && data.keys().hasAll(['promoCode']))) : true;
+      let types = data.userId is string && data.userId.size() <= 128
+               && data.type is string && (data.type == 'purchase')
+               && data.amount is number
+               && data.status is string && (data.status == 'pending' || data.status == 'completed' || data.status == 'failed')
+               && (!('promoCode' in data) || (data.promoCode == null || (data.promoCode is string && data.promoCode.size() <= 64)));
+      return hasRequired && types;
+    }
+
+    match /users/{userId} {
+      allow read: if true;
+      allow create: if isValidId(userId)
+                    && isValidUser(incoming(), true)
+                    && incoming().uid == userId
+                    && incoming().createdAt == request.time
+                    && incoming().updatedAt == request.time
+                    // Atomicity: they must also create their code in referralCodes
+                    && existsAfter(/databases/$(database)/documents/referralCodes/$(incoming().referralCode))
+                    && getAfter(/databases/$(database)/documents/referralCodes/$(incoming().referralCode)).data.ownerId == userId;
+      
+      allow update: if 
+        (
+          isValidId(userId)
+          && isValidUser(incoming(), false)
+          && incoming().uid == existing().uid
+          && incoming().createdAt == existing().createdAt
+          && incoming().updatedAt == request.time
+          && (!('referralCode' in existing()) ? true : incoming().referralCode == existing().referralCode)
+          && (incoming().balance <= existing().balance + 100000)
+          && (
+            (incoming().diff(existing()).affectedKeys().hasOnly(['balance', 'updatedAt']) && incoming().balance > existing().balance)
+          )
+        );
+    }
+
+    match /referralCodes/{codeId} {
+      allow read: if true;
+      allow create: if isValidId(codeId)
+                    && isValidReferralCode(incoming(), true)
+                    && incoming().createdAt == request.time;
+    }
+
+    match /transactions/{transactionId} {
+      allow read: if true;
+      allow create: if isValidId(transactionId)
+                    && isValidTransaction(incoming(), true)
+                    && incoming().createdAt == request.time;
+    }
+  }
+}

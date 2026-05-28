@@ -1,0 +1,56 @@
+{
+  "entities": {
+    "User": {
+      "title": "User",
+      "description": "User profile with referral and balance information",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string" },
+        "email": { "type": "string" },
+        "referralCode": { "type": "string", "description": "Unique referral code for this user" },
+        "referredBy": { "type": "string", "description": "UID of the user who referred them" },
+        "balance": { "type": "number", "description": "Current diamond balance" },
+        "createdAt": { "type": "string", "description": "timestamp" },
+        "updatedAt": { "type": "string", "description": "timestamp" }
+      },
+      "required": ["uid", "email", "referralCode", "balance", "createdAt", "updatedAt"]
+    },
+    "ReferralCode": {
+      "title": "ReferralCode",
+      "description": "Lookup table for referral codes to ensure uniqueness",
+      "type": "object",
+      "properties": {
+        "ownerId": { "type": "string" },
+        "createdAt": { "type": "string" }
+      },
+      "required": ["ownerId", "createdAt"]
+    },
+    "Transaction": {
+      "title": "Transaction",
+      "description": "Records of purchases and bonuses",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "type": { "type": "string", "enum": ["purchase", "referral_bonus"] },
+        "amount": { "type": "number" },
+        "status": { "type": "string", "enum": ["pending", "completed", "failed"] },
+        "createdAt": { "type": "string" }
+      },
+      "required": ["userId", "type", "amount", "status", "createdAt"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": { "$ref": "User" },
+      "description": "Store users"
+    },
+    "/referralCodes/{codeId}": {
+      "schema": { "$ref": "ReferralCode" },
+      "description": "Lookup mapping referral code to owner"
+    },
+    "/transactions/{transactionId}": {
+      "schema": { "$ref": "Transaction" },
+      "description": "Store transaction logs"
+    }
+  }
+}
